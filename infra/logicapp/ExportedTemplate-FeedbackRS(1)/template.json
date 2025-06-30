@@ -1,0 +1,188 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_Feedback_app_name": {
+            "defaultValue": "Feedback-app",
+            "type": "String"
+        },
+        "connections_azureblob_1_externalid": {
+            "defaultValue": "/subscriptions/8a8c30dc-31f2-4cac-8313-6de9244fc188/resourceGroups/FeedbackRS/providers/Microsoft.Web/connections/azureblob-1",
+            "type": "String"
+        },
+        "connections_outlook_externalid": {
+            "defaultValue": "/subscriptions/8a8c30dc-31f2-4cac-8313-6de9244fc188/resourceGroups/FeedbackRS/providers/Microsoft.Web/connections/outlook",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_Feedback_app_name')]",
+            "location": "uksouth",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_blob_is_added_or_modified_(properties_only)_(V2)": {
+                            "recurrence": {
+                                "interval": 3,
+                                "frequency": "Minute"
+                            },
+                            "evaluatedRecurrence": {
+                                "interval": 3,
+                                "frequency": "Minute"
+                            },
+                            "splitOn": "@triggerBody()",
+                            "metadata": {
+                                "JTJmZmVlZGJhY2t1cGxvYWRz": "/feedbackuploads"
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob-1']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/triggers/batch/onupdatedfile",
+                                "queries": {
+                                    "folderId": "JTJmZmVlZGJhY2t1cGxvYWRz",
+                                    "maxFileCount": 1,
+                                    "checkBothCreatedAndModifiedDateTime": false
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_blob_content_using_path": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://textai-aitext.cognitiveservices.azure.com/text/analytics/v3.1/sentiment",
+                                "method": "POST",
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "Ocp-Apim-Subscription-Key": "nM3x3fHqQVLhM2LcpsSh3UstZU5lfxZCIiFG46UKfsijfH791SOeJQQJ99BFACYeBjFXJ3w3AAAaACOGo9bU"
+                                },
+                                "body": {
+                                    "documents": [
+                                        {
+                                            "language": "en",
+                                            "id": "1",
+                                            "text": "@{body('Get_blob_content_using_path')}"
+                                        }
+                                    ]
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "documents": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "sentiment": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Send_an_email_(V2)": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "To": "gowthamudhai22@gmail.com",
+                                    "Subject": "Feedback Sentiment: @{body('Parse_JSON')?['documents'][0]['sentiment']}\n",
+                                    "Body": "<p class=\"editor-paragraph\">Hello!<br><br>The feedback you submitted has this sentiment: @{body('Parse_JSON')?['documents'][0]['sentiment']}<br><br>Thank you!</p><br>",
+                                    "Importance": "Normal"
+                                },
+                                "path": "/v2/Mail"
+                            }
+                        },
+                        "Get_blob_content_using_path": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob-1']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "path": "/feedbackuploads/gow.txt",
+                                    "inferContentType": true,
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob-1": {
+                                "id": "/subscriptions/8a8c30dc-31f2-4cac-8313-6de9244fc188/providers/Microsoft.Web/locations/uksouth/managedApis/azureblob",
+                                "connectionId": "[parameters('connections_azureblob_1_externalid')]",
+                                "connectionName": "azureblob-1"
+                            },
+                            "outlook": {
+                                "id": "/subscriptions/8a8c30dc-31f2-4cac-8313-6de9244fc188/providers/Microsoft.Web/locations/uksouth/managedApis/outlook",
+                                "connectionId": "[parameters('connections_outlook_externalid')]",
+                                "connectionName": "outlook"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
