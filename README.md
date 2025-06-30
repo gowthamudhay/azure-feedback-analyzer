@@ -11,11 +11,7 @@ This project contains an Azure Logic App that analyzes customer feedback using A
 
 ## Project Structure
 
-azure-feedback-analyzer/
-├── infra/
-│ └── logicapp/
-│ ├── template.json # ARM template for Logic App deployment
-│ └── parameters.json # Parameters for deployment
+azure-feedback-analyzer/infra/logicapp/template.json parameters.json 
 
 
 ## Prerequisites
